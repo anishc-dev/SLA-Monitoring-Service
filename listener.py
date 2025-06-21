@@ -2,10 +2,11 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
+from database import init_db, create_ticket_db, get_all_tickets, get_ticket_by_id_db
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
-ticket_db = {}
+init_db()
 
 class TicketValidator(BaseModel):
     id: Optional[int] = Field(default=0)
@@ -40,44 +41,45 @@ async def create_ticket(ticket: TicketValidator):
         return status
 
     ticket_dict = ticket.model_dump()
+    db_result = create_ticket_db(ticket_dict)
     
-    # idempotency by id + updated_at
-    for stored_id, stored_ticket in ticket_db.items():
-        if stored_ticket["id"] == ticket.id and stored_ticket["updated_at"] == ticket.updated_at:
-            print(f"Ticket already exists. Updating ticket ID {ticket.id}")
-            ticket_db[stored_id] = ticket_dict
-            return {"received": ticket_dict, "status": "updated"}
-
-    ticket_db[ticket.id] = ticket_dict
-    print(f"Stored new ticket with ID {ticket.id}. Total tickets: {len(ticket_db)}")
-    return {"received": ticket_dict, "status": "success"}
+    if db_result.get("status") == "success":
+        return {"received": ticket_dict, "status": "success"}
+    else:
+        return db_result
 
 @app.get("/tickets")
 async def get_tickets():
     """Get all tickets"""
-    tickets_list = list(ticket_db.values())
-    print(f"Returning {len(tickets_list)} tickets from database")
-    print(f"Database keys: {list(ticket_db.keys())}")
-    return {"tickets": tickets_list, "count": len(ticket_db)}
+    tickets = get_all_tickets()
+    return {"tickets": tickets, "count": len(tickets)}
 
 @app.get("/tickets/{ticket_id}")
 async def get_ticket_by_id(ticket_id: int):
     """Get ticket by ID"""
-    if ticket_id in ticket_db:
-        return {"ticket": ticket_db[ticket_id]}
+    ticket = get_ticket_by_id_db(ticket_id)
+    if ticket:
+        return {"ticket": ticket}
     return {"error": f"Ticket with ID {ticket_id} not found"}
 
 @app.get("/debug")
 async def debug_info():
     """Debug endpoint to see what's in the database"""
-    return {
-        "ticket_db_keys": list(ticket_db.keys()),
-        "ticket_db_values": list(ticket_db.values()),
-        "ticket_db_type": str(type(ticket_db)),
-        "ticket_db_length": len(ticket_db)
-    }
+    return {"message": "Debug endpoint not implemented yet"}
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Ticket Listener API"}
+
+@app.post("/inject-test-ticket")
+async def inject_test_ticket():
+    """Inject a simple test ticket"""
+    test_ticket = TicketValidator(
+        id=1,
+        priority="high",
+        status="open",
+        customer_tier="P0"
+    )
+    return await create_ticket(test_ticket)
+
 

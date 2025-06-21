@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: sla_monitor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   sla-monitor:
     build: .
     ports:
@@ -9,10 +20,17 @@ services:
       - .:/app
     environment:
       - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/sla_monitor
+    depends_on:
+      - postgres
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s 
+      start_period: 40s
+    command: /bin/sh -c "sleep 10 && uvicorn listener:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  postgres_data: 
