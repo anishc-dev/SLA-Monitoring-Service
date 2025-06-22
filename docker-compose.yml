@@ -31,6 +31,19 @@ services:
       retries: 3
       start_period: 40s
     command: /bin/sh -c "sleep 10 && uvicorn listener:app --host 0.0.0.0 --port 8000"
+  
+  scheduler:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/sla_monitor
+    depends_on:
+      - postgres
+      - sla-monitor
+    restart: unless-stopped
+    command: /bin/sh -c "sleep 15 && python scheduler.py"
 
 volumes:
   postgres_data: 
