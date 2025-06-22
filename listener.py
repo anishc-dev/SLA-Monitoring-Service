@@ -43,10 +43,12 @@ async def create_ticket(ticket: TicketValidator):
     ticket_dict = ticket.model_dump()
     db_result = create_ticket_db(ticket_dict)
     
-    if db_result.get("status") == "success":
-        return {"received": ticket_dict, "status": "success"}
+    if db_result.get("status") == "CREATED":
+        return {"received": ticket_dict, "status": "CREATED", "message": "Ticket CREATED successfully"}
+    elif db_result.get("status") == "UPDATED":
+        return {"received": ticket_dict, "status": "UPDATED", "message": "Ticket UPDATED successfully"}
     else:
-        return db_result
+        return {"received": ticket_dict, "status": "ERROR", "message": "Ticket ERROR"}
 
 @app.get("/")
 def read_root():

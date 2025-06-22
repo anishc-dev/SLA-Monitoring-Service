@@ -26,19 +26,34 @@ def create_ticket_db(ticket_data):
     cur = conn.cursor()
     
     try:
+        # Check for idempotency - same id and updated_at
+        cur.execute("""
+            SELECT * FROM tickets WHERE id = %s AND updated_at = %s
+        """, (ticket_data["id"], ticket_data["updated_at"]))
+        
+        if cur.fetchone():
+            # Update other fields for same id and updated_at
+            cur.execute("""
+                UPDATE tickets 
+                SET priority=%s, status=%s, created_at=%s, customer_tier=%s
+                WHERE id=%s AND updated_at=%s
+            """, (ticket_data["priority"], ticket_data["status"], 
+                  ticket_data["created_at"], ticket_data["customer_tier"],
+                  ticket_data["id"], ticket_data["updated_at"]))
+            conn.commit()
+            return {"status": "UPDATED"}
+
+        # Insert new ticket if not found
         cur.execute("""
             INSERT INTO tickets (id, priority, status, created_at, updated_at, customer_tier)
             VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                priority = EXCLUDED.priority,
-                status = EXCLUDED.status,
-                updated_at = EXCLUDED.updated_at,
-                customer_tier = EXCLUDED.customer_tier
         """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
               ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
         conn.commit()
-        return {"status": "success"}
+        return {"status": "CREATED"}
+        
     except Exception as e:
+        print("DB ERROR:", str(e))
         conn.rollback()
         return {"error": str(e)}
     finally:
