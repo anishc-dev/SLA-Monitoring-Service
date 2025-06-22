@@ -1,8 +1,9 @@
 import time
 import sys
-from database import get_db, get_all_tickets
+from database import get_all_tickets
 from sla_definition import SLA_DEFINITIONS
 from datetime import datetime, timezone
+from slack import slack_message_sender
 
 class SLABreacher:
     def __init__(self):
@@ -23,7 +24,7 @@ class SLABreacher:
             if not sla_time:
                 print('SLA Breach Definition Not matched for ticket: ', id)
                 sys.stdout.flush()
-                return
+                continue
             
             ticket_created_at = ticket['created_at']
             ticket_created_at_datetime = datetime.fromisoformat(ticket_created_at.replace('Z', '+00:00'))
@@ -35,20 +36,17 @@ class SLABreacher:
 
             if elapsed_time_percentage > 85:
                 print('SLA To be Breached for ticket: ', id)
+                slack_message_sender(ticket, elapsed_time_seconds)
                 sys.stdout.flush()
-                return
-            if elapsed_time_percentage > 95:
+            elif elapsed_time_percentage > 95:
                 print('SLA Breached for ticket: ', id)
                 sys.stdout.flush()
-                return
-            if elapsed_time_seconds/sla_time > 0.99:
+            elif elapsed_time_seconds/sla_time > 0.99:
                 print('SLA Critical Breached for ticket: ', id)
                 sys.stdout.flush()
-                return
             else:
                 print('SLA Not Breached for ticket: ', id, 'remaining time: ', sla_time - elapsed_time_seconds , 'seconds')
                 sys.stdout.flush()
-                return
 
 def main():
     print("Scheduler is running")
