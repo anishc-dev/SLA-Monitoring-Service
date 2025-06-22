@@ -14,13 +14,12 @@ def send_slack_message(message, ticket_id):
     }
     try:
         response = requests.post(slack_URL, json=slack_message)
-        resp = response.json()
-        if resp.status_code == 200:
+        if response.status_code == 200:
             print(f"Slack message sent successfully for ticket: {ticket_id}")
-            return {"status": "success", "message": "Slack message sent successfully", "response": resp.text}
+            return {"status": "success", "message": "Slack message sent successfully", "response": response.text}
         else:
             print(f"Error sending slack message for ticket: {ticket_id}")
-            return {"status": "error", "message": "Error sending slack message", "response": resp.text}
+            return {"status": "error", "message": "Error sending slack message", "response": response.text}
     except requests.exceptions.RequestException as e:
         print(f"Error sending slack message: {e}")
         return {"status": "exception", "message": "Error sending slack message", "response": str(e) }

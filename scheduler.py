@@ -4,6 +4,7 @@ from database import get_all_tickets
 from sla_definition import SLA_DEFINITIONS
 from datetime import datetime, timezone
 from slack import slack_message_sender
+from database import create_sla_breach_alert_db, update_sla_breach_alert_db
 
 class SLABreacher:
     def __init__(self):
@@ -34,15 +35,17 @@ class SLABreacher:
             
             elapsed_time_percentage = elapsed_time_seconds/sla_time * 100
 
-            if elapsed_time_percentage > 85:
-                print('SLA To be Breached for ticket: ', id)
-                slack_message_sender(ticket, elapsed_time_seconds)
-                sys.stdout.flush()
-            elif elapsed_time_percentage > 95:
-                print('SLA Breached for ticket: ', id)
-                sys.stdout.flush()
-            elif elapsed_time_seconds/sla_time > 0.99:
+            if elapsed_time_seconds/sla_time > 0.99:
                 print('SLA Critical Breached for ticket: ', id)
+                db_result = update_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "BREACH")
+                if db_result.get("status") in ["CREATED", "UPDATED"]:
+                    slack_message_sender(ticket, elapsed_time_seconds)
+                sys.stdout.flush()
+            elif elapsed_time_percentage > 85:
+                print('SLA To be Breached for ticket: ', id)
+                db_result = create_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "ALERT")
+                if db_result.get("status") == "CREATED":
+                    slack_message_sender(ticket, elapsed_time_seconds)
                 sys.stdout.flush()
             else:
                 print('SLA Not Breached for ticket: ', id, 'remaining time: ', sla_time - elapsed_time_seconds , 'seconds')

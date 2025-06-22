@@ -4,22 +4,21 @@ import os
 def get_db():
     return psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/sla_monitor"))
 
-def init_db():
+def create_table_if_not_exists(table_name, columns, primary_key):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS tickets (
-            id INTEGER PRIMARY KEY,
-            priority VARCHAR(10),
-            status VARCHAR(20),
-            created_at VARCHAR(50),
-            updated_at VARCHAR(50),
-            customer_tier VARCHAR(10)
-        )
-    """)
+    cur.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns}, PRIMARY KEY ({primary_key}))")
     conn.commit()
     cur.close()
     conn.close()
+
+def init_db():
+    create_table_if_not_exists(
+        "tickets", "id INTEGER, priority VARCHAR(10), status VARCHAR(20), created_at VARCHAR(50), updated_at VARCHAR(50), \
+         customer_tier VARCHAR(10)", "id")
+    create_table_if_not_exists("sla_breach_alerts", "id SERIAL, ticket_id INTEGER, priority VARCHAR(10), status VARCHAR(20), \
+        created_at VARCHAR(50), updated_at VARCHAR(50), customer_tier VARCHAR(10), elapsed_time_seconds INTEGER, elapsed_time_percentage INTEGER, \
+        escalation_level VARCHAR(10)", "id")
 
 def create_ticket_db(ticket_data):
     conn = get_db()
@@ -85,5 +84,82 @@ def get_all_tickets(open=None):
             "customer_tier": ticket[5]
         }
     return tickets_json
+
+def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        # Check if an alert already exists for this ticket and escalation level
+        cur.execute("""
+            SELECT id FROM sla_breach_alerts 
+            WHERE ticket_id = %s AND escalation_level = %s
+        """, (ticket_data["id"], escalation_level))
+        
+        if cur.fetchone():
+            # Record already exists, don't create duplicate
+            print(f"Alert already exists for ticket {ticket_data['id']} with escalation level {escalation_level}")
+            return {"status": "EXISTS"}
+        
+        # Create new alert record
+        cur.execute("""
+            INSERT INTO sla_breach_alerts (ticket_id, priority, status, created_at, updated_at, customer_tier, \
+            elapsed_time_seconds, elapsed_time_percentage, escalation_level)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], ticket_data["created_at"],
+         ticket_data["updated_at"], ticket_data["customer_tier"], int(elapsed_time_seconds), int(elapsed_time_percentage), escalation_level))
+        conn.commit()
+        return {"status": "CREATED"}
+        
+    except Exception as e:
+        print("DB ERROR:", str(e))
+        conn.rollback()
+        return {"error": str(e)}
+    finally:
+        cur.close()
+        conn.close()
+
+def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        # Check if a record exists for this ticket and escalation level
+        cur.execute("""
+            SELECT id FROM sla_breach_alerts 
+            WHERE ticket_id = %s AND escalation_level = %s
+        """, (ticket_data["id"], escalation_level))
+        
+        existing_record = cur.fetchone()
+        
+        if existing_record:
+            # Update existing record
+            cur.execute("""
+                UPDATE sla_breach_alerts 
+                SET elapsed_time_seconds = %s, elapsed_time_percentage = %s 
+                WHERE ticket_id = %s AND escalation_level = %s
+            """, (int(elapsed_time_seconds), int(elapsed_time_percentage), ticket_data["id"], escalation_level))
+            conn.commit()
+            return {"status": "UPDATED"}
+        else:
+            # Create new record if none exists
+            print(f"Alert does not exist for ticket {ticket_data['id']} with escalation level {escalation_level}")
+            cur.execute("""
+                INSERT INTO sla_breach_alerts (ticket_id, priority, status, created_at, updated_at, customer_tier, \
+                elapsed_time_seconds, elapsed_time_percentage, escalation_level)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], ticket_data["created_at"],
+             ticket_data["updated_at"], ticket_data["customer_tier"], int(elapsed_time_seconds), int(elapsed_time_percentage), escalation_level))
+            conn.commit()
+            return {"status": "CREATED"}
+            
+    except Exception as e:
+        print("DB ERROR:", str(e))
+        conn.rollback()
+        return {"error": str(e)}
+    finally:
+        cur.close()
+        conn.close()
+
 
 
