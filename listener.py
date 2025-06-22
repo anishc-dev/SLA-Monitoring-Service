@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
-from database import init_db, create_ticket_db
+from database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
@@ -33,9 +33,7 @@ def ticket_validator(ticket: TicketValidator):
 
 @app.post("/tickets")
 async def create_ticket(ticket: TicketValidator):
-    """
-    Ingest ticket data
-    """
+
     status = ticket_validator(ticket)
     if status.get("status") != "success":
         return status
@@ -53,3 +51,19 @@ async def create_ticket(ticket: TicketValidator):
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Ticket Listener API"}
+
+@app.get("/tickets/{id}")
+async def get_tickets_by_id(id: int):
+    """
+    Get ticket by ID
+    """
+    ticket = get_ticket_by_id(id)
+    return {"received": ticket, "status": "SUCCESS", "message": "Ticket SUCCESS"}
+
+@app.get("/dashboard")
+async def get_dashboard():
+    """
+    Get dashboard data
+    """
+    dashboard_data = get_dashboard_data()
+    return {"received": dashboard_data, "status": "SUCCESS", "message": "Dashboard SUCCESS"}

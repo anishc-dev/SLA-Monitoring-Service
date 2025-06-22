@@ -15,7 +15,7 @@ def create_table_if_not_exists(table_name, columns, primary_key):
 def init_db():
     create_table_if_not_exists(
         "tickets", "id INTEGER, priority VARCHAR(10), status VARCHAR(20), created_at VARCHAR(50), updated_at VARCHAR(50), \
-         customer_tier VARCHAR(10)", "id")
+         customer_tier VARCHAR(10), escalation_level VARCHAR(10), elapsed_time_percentage INTEGER, elapsed_time_seconds INTEGER", "id")
     create_table_if_not_exists("sla_breach_alerts", "id SERIAL, ticket_id INTEGER, priority VARCHAR(10), status VARCHAR(20), \
         created_at VARCHAR(50), updated_at VARCHAR(50), customer_tier VARCHAR(10), elapsed_time_seconds INTEGER, elapsed_time_percentage INTEGER, \
         escalation_level VARCHAR(10)", "id")
@@ -85,6 +85,28 @@ def get_all_tickets(open=None):
         }
     return tickets_json
 
+def get_ticket_by_id(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT * FROM tickets WHERE id = %s
+    """, (id,))
+    ticket = cur.fetchone()
+    cur.close() 
+    conn.close()
+    return ticket
+
+def get_dashboard_data():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT * FROM tickets
+    """)
+    dashboard_data = cur.fetchall()
+    cur.close()
+    conn.close()
+    return dashboard_data
+
 def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
     conn = get_db()
     cur = conn.cursor()
@@ -109,6 +131,16 @@ def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
         """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], ticket_data["created_at"],
          ticket_data["updated_at"], ticket_data["customer_tier"], int(elapsed_time_seconds), int(elapsed_time_percentage), escalation_level))
         conn.commit()
+
+        cur.execute("""
+            UPDATE tickets
+            SET escalation_level = %s,
+                elapsed_time_percentage = %s,
+                elapsed_time_seconds = %s
+            WHERE id = %s
+        """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
+        conn.commit()
+
         return {"status": "CREATED"}
         
     except Exception as e:
@@ -140,6 +172,15 @@ def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
                 WHERE ticket_id = %s AND escalation_level = %s
             """, (int(elapsed_time_seconds), int(elapsed_time_percentage), ticket_data["id"], escalation_level))
             conn.commit()
+
+            cur.execute("""
+                UPDATE tickets
+                SET escalation_level = %s,
+                    elapsed_time_percentage = %s,
+                    elapsed_time_seconds = %s
+                WHERE id = %s
+            """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
+            conn.commit()
             return {"status": "UPDATED"}
         else:
             # Create new record if none exists
@@ -150,6 +191,15 @@ def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], ticket_data["created_at"],
              ticket_data["updated_at"], ticket_data["customer_tier"], int(elapsed_time_seconds), int(elapsed_time_percentage), escalation_level))
+            conn.commit()
+
+            cur.execute("""
+                UPDATE tickets
+                SET escalation_level = %s,
+                    elapsed_time_percentage = %s,
+                    elapsed_time_seconds = %s
+                WHERE id = %s
+            """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
             conn.commit()
             return {"status": "CREATED"}
             
