@@ -1,0 +1,21 @@
+sla_definitions:
+  P0:
+    high: 3600   
+    medium: 7200 
+    low: 14400    
+  P1:
+    high: 7200    
+    medium: 14400 
+    low: 28800    
+  P2:
+    high: 14400   
+    medium: 28800 
+    low: 57600    
+  P3:
+    high: 28800   
+    medium: 57600 
+    low: 86400    
+
+escalation_levels:
+  alert: ALERT    
+  breach: BREACH 
