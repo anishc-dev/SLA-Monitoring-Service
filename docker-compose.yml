@@ -43,7 +43,7 @@ services:
       - postgres
       - sla-monitor
     restart: unless-stopped
-    command: /bin/sh -c "sleep 15 && python scheduler.py"
+    command: /bin/sh -c "sleep 15 && python -u scheduler.py"
 
 volumes:
   postgres_data: 

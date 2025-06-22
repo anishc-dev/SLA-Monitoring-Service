@@ -1,21 +1,69 @@
 import time
-from database import get_db
-def sla_breacher():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT * FROM tickets WHERE status = 'open'
-    """)
-    tickets = cur.fetchall()
-    print(tickets)
-    conn.close()        
-        
+import sys
+from database import get_db, get_all_tickets
+from sla_definition import SLA_DEFINITIONS
+from datetime import datetime, timezone
+
+class SLABreacher:
+    def __init__(self):
+        self.open_tickets = get_all_tickets(open=True)
+
+    def sla_breacher(self):
+   
+        print('Checking for SLA Breach for open tickets, Total tickets: ', len(self.open_tickets))
+        print('--------------------------------')
+        sys.stdout.flush()
+
+        for id, ticket in self.open_tickets.items():
+            priority = ticket['priority'].lower()
+            tier = ticket['customer_tier'].upper()
+            sla_time = SLA_DEFINITIONS.get(tier,{}).get(priority)
+            print(f"SLA Time: {sla_time} seconds for ticket: {id}")
+            
+            if not sla_time:
+                print('SLA Breach Definition Not matched for ticket: ', id)
+                sys.stdout.flush()
+                return
+            
+            ticket_created_at = ticket['created_at']
+            ticket_created_at_datetime = datetime.fromisoformat(ticket_created_at.replace('Z', '+00:00'))
+            current_time = datetime.now(timezone.utc)
+            elapsed_time_seconds = (current_time - ticket_created_at_datetime).total_seconds()
+            print(f"Elapsed time: {elapsed_time_seconds} seconds for ticket: {id}")
+            
+            elapsed_time_percentage = elapsed_time_seconds/sla_time * 100
+
+            if elapsed_time_percentage > 85:
+                print('SLA To be Breached for ticket: ', id)
+                sys.stdout.flush()
+                return
+            if elapsed_time_percentage > 95:
+                print('SLA Breached for ticket: ', id)
+                sys.stdout.flush()
+                return
+            if elapsed_time_seconds/sla_time > 0.99:
+                print('SLA Critical Breached for ticket: ', id)
+                sys.stdout.flush()
+                return
+            else:
+                print('SLA Not Breached for ticket: ', id, 'remaining time: ', sla_time - elapsed_time_seconds , 'seconds')
+                sys.stdout.flush()
+                return
 
 def main():
     print("Scheduler is running")
+    sys.stdout.flush()
     while True:
-        sla_breacher()
-        time.sleep(60)
+        try:
+            sla_breacher = SLABreacher()
+            sla_breacher.sla_breacher()
+            print(f"Scheduler completed check at {datetime.now()}")
+            sys.stdout.flush()
+            time.sleep(60)
+        except Exception as e:
+            print(f"Scheduler error: {e}")
+            sys.stdout.flush()
+            time.sleep(60)
 
 if __name__ == "__main__":
     main()

@@ -60,3 +60,30 @@ def create_ticket_db(ticket_data):
         cur.close()
         conn.close()
 
+def get_all_tickets(open=None):
+    conn = get_db()
+    cur = conn.cursor()
+    if open:
+        cur.execute("""
+            SELECT * FROM tickets WHERE status = 'open'
+        """)
+    else:
+        cur.execute("""
+            SELECT * FROM tickets
+        """)
+    tickets = cur.fetchall()
+    cur.close()
+    conn.close()
+    tickets_json = {}
+    for ticket in tickets:
+        tickets_json[ticket[0]] = {
+            "id": ticket[0],
+            "priority": ticket[1],
+            "status": ticket[2],
+            "created_at": ticket[3],
+            "updated_at": ticket[4],
+            "customer_tier": ticket[5]
+        }
+    return tickets_json
+
+
