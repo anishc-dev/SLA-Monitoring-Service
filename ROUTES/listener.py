@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
 from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
+from fastapi.responses import HTMLResponse
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
@@ -74,7 +75,15 @@ async def get_tickets_by_id(id: int):
 @app.get("/dashboard")
 async def get_dashboard():
     """
-    Get dashboard data
+    Get dashboard data as HTML
     """
-    dashboard_data = get_dashboard_data()
-    return {"received": dashboard_data, "status": "SUCCESS", "message": "Dashboard SUCCESS"}
+    dashboard_data = sorted(get_dashboard_data(), key=lambda x: x[0])  # Sort by ID
+    headers = ["ID", "Priority", "Status", "Created At", "Updated At", "Customer Tier", "Escalation Level", "Elapsed %", "Elapsed Sec"]
+    html = "<html><head><title>SLA Dashboard</title></head><body>"
+    html += "<h2>SLA Dashboard</h2>"
+    html += "<table border='1' cellpadding='5' style='border-collapse:collapse;'>"
+    html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"
+    for row in dashboard_data:
+        html += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+    html += "</table></body></html>"
+    return HTMLResponse(content=html)
