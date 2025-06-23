@@ -1,7 +1,7 @@
 import time
 import sys
 from database import get_all_tickets
-from load_sla_yml import load_sla_yml
+from load_sla_yml import config_manager
 from datetime import datetime, timezone
 from slack import slack_message_sender
 from database import create_sla_breach_alert_db, update_sla_breach_alert_db
@@ -19,7 +19,7 @@ class SLABreacher:
         for id, ticket in self.open_tickets.items():
             priority = ticket['priority'].lower()
             tier = ticket['customer_tier'].upper()
-            sla_time = load_sla_yml("sla_config.yml").get("sla_definitions", {}).get(tier, {}).get(priority)
+            sla_time = config_manager.config.get("sla_definitions", {}).get(tier, {}).get(priority)
             print(f"SLA Time: {sla_time} seconds for ticket: {id}")
             
             if not sla_time:

@@ -1,8 +1,36 @@
 import yaml
+import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-def load_sla_yml(file_path):
-    with open(file_path, 'r') as file:
-        return yaml.safe_load(file)
+
+class SLAConfigManager:
+    def __init__(self, config_path):
+        self.config_path = config_path
+        self.config = {}
+        self.observer = Observer()
+        self.event_handler = FileSystemEventHandler()
+
+    def load_config(self):
+        with open(self.config_path, 'r') as file:
+            self.config = yaml.safe_load(file)
+        print(f"Config loaded from {self.config_path}")
+
+    def on_modified(self, event):
+        if event.src_path == self.config_path:
+            self.load_config()
+
+    def start(self):
+        self.load_config()
+        self.observer.schedule(self.event_handler, path=self.config_path, recursive=False)
+        self.observer.start()
+        print(f"Watching for changes in {self.config_path}")
+
+config_manager = SLAConfigManager("sla_config.yml")
+config_manager.start()
 
 if __name__ == "__main__":
-    print(load_sla_yml("sla_config.yml"))
+    config_manager = SLAConfigManager("sla_config.yml")
+    config_manager.start()
+    while True:
+        time.sleep(1)
