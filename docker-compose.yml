@@ -21,7 +21,7 @@ services:
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/sla_monitor
-      - SLACK_URL=https://hooks.slack.com/services/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
+      - SLACK_URL=http://slack-mock:5000/slack/events
     depends_on:
       - postgres
     restart: unless-stopped
@@ -40,12 +40,20 @@ services:
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/sla_monitor
-      - SLACK_URL=https://hooks.slack.com/services/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
+      - SLACK_URL=http://slack-mock:5000/slack/events
     depends_on:
       - postgres
       - sla-monitor
     restart: unless-stopped
     command: /bin/sh -c "sleep 15 && python -u scheduler.py"
+  
+  slack-mock:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    command: /bin/sh -c "sleep 15 && python -u slack_mock.py"
 
 volumes:
   postgres_data: 
