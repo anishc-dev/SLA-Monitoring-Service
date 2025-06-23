@@ -13,8 +13,8 @@ class SLABreacher:
 
     def sla_breacher(self):
    
-        print('Checking for SLA Breach for open tickets, Total tickets: ', len(self.open_tickets))
-        print('--------------------------------')
+        info("Checking for SLA Breach for open tickets", total_tickets=len(self.open_tickets))
+        info("SLA breach check started", separator="--------------------------------")
         sys.stdout.flush()
 
         for id, ticket in self.open_tickets.items():

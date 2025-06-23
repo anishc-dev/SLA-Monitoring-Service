@@ -1,6 +1,12 @@
 from fastapi import FastAPI, Request
 import uvicorn
 import logging
+import sys
+import os
+
+# Add the app directory to the path so we can import logger
+sys.path.append('/app')
+from logger import info
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -11,7 +17,7 @@ app = FastAPI()
 @app.post("/slack/events")
 async def slack_events(request: Request):
     data = await request.json()
-    print(data)
+    info("Slack event received", event_data=data)
     return {"status": "success", "message": "Slack events received"}
 
 @app.get("/")

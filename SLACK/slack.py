@@ -1,5 +1,6 @@
 import os
 import requests
+from logger import info, error
 
 def send_slack_message(message, ticket_id):
     """
@@ -15,16 +16,16 @@ def send_slack_message(message, ticket_id):
     try:
         response = requests.post(slack_URL, json=slack_message)
         if response.status_code == 200:
-            print(f"Slack message sent successfully for ticket: {ticket_id}")
+            info("Slack message sent successfully", ticket_id=ticket_id)
             return {"status": "success", "message": "Slack message sent successfully", "response": response.text}
         else:
-            print(f"Error sending slack message for ticket: {ticket_id}")
+            error("Error sending slack message", ticket_id=ticket_id, status_code=response.status_code)
             return {"status": "error", "message": "Error sending slack message", "response": response.text}
     except requests.exceptions.RequestException as e:
-        print(f"Error sending slack message: {e}")
+        error("Error sending slack message - RequestException", ticket_id=ticket_id, error=str(e))
         return {"status": "exception", "message": "Error sending slack message", "response": str(e) }
     except Exception as e:
-        print(f"Error sending slack message: {e}")
+        error("Error sending slack message - Exception", ticket_id=ticket_id, error=str(e))
         return {"status": "exception", "message": "Error sending slack message", "response": str(e) }
 
 def slack_message_sender(ticket, remaining_time):
