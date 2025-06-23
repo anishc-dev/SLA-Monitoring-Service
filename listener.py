@@ -31,8 +31,25 @@ def ticket_validator(ticket: TicketValidator):
     
     return {"status": "success"}
 
+def log_ticket_creation(db_result, ticket_dict):
+    if db_result.get("status") == "CREATED":
+        return {"received": ticket_dict, "status": "CREATED", "message": "Ticket CREATED successfully"}
+    elif db_result.get("status") == "UPDATED":
+        return {"received": ticket_dict, "status": "UPDATED", "message": "Ticket UPDATED successfully"}
+    else:
+        return {"received": ticket_dict, "status": "ERROR", "message": "Ticket ERROR"}
+
 @app.post("/tickets")
 async def create_ticket(ticket: TicketValidator):
+
+    if isinstance(ticket, list):
+        for t in ticket:
+            status = ticket_validator(t)
+            if status.get("status") != "success":
+                return status
+            ticket_dict = t.model_dump()
+            db_result = create_ticket_db(ticket_dict)
+            return log_ticket_creation(db_result, ticket_dict)
 
     status = ticket_validator(ticket)
     if status.get("status") != "success":
@@ -40,13 +57,7 @@ async def create_ticket(ticket: TicketValidator):
 
     ticket_dict = ticket.model_dump()
     db_result = create_ticket_db(ticket_dict)
-    
-    if db_result.get("status") == "CREATED":
-        return {"received": ticket_dict, "status": "CREATED", "message": "Ticket CREATED successfully"}
-    elif db_result.get("status") == "UPDATED":
-        return {"received": ticket_dict, "status": "UPDATED", "message": "Ticket UPDATED successfully"}
-    else:
-        return {"received": ticket_dict, "status": "ERROR", "message": "Ticket ERROR"}
+    return log_ticket_creation(db_result, ticket_dict)
 
 @app.get("/")
 def read_root():
