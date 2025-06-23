@@ -26,11 +26,11 @@ class SLAConfigManager:
         self.observer.start()
         print(f"Watching for changes in {self.config_path}")
 
-config_manager = SLAConfigManager("sla_config.yml")
+config_manager = SLAConfigManager("SLACK/sla_config.yml")
 config_manager.start()
 
 if __name__ == "__main__":
-    config_manager = SLAConfigManager("sla_config.yml")
+    config_manager = SLAConfigManager("SLACK/sla_config.yml")
     config_manager.start()
     while True:
         time.sleep(1)

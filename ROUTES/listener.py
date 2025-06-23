@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
-from database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
+from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 

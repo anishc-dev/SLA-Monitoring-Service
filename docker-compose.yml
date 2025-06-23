@@ -31,7 +31,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    command: /bin/sh -c "sleep 10 && uvicorn listener:app --host 0.0.0.0 --port 8000"
+    command: /bin/sh -c "sleep 10 && uvicorn ROUTES.listener:app --host 0.0.0.0 --port 8000"
   
   scheduler:
     build: .
@@ -45,7 +45,7 @@ services:
       - postgres
       - sla-monitor
     restart: unless-stopped
-    command: /bin/sh -c "sleep 15 && python -u scheduler.py"
+    command: /bin/sh -c "sleep 15 && python -u ENGINE/scheduler.py"
   
   slack-mock:
     build: .
@@ -53,7 +53,7 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
-    command: /bin/sh -c "sleep 15 && python -u slack_mock.py"
+    command: /bin/sh -c "sleep 15 && python -u SLACK/slack_mock.py"
 
 volumes:
   postgres_data: 

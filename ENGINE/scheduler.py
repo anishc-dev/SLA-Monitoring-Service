@@ -1,10 +1,10 @@
 import time
 import sys
-from database import get_all_tickets
-from load_sla_yml import config_manager
+from DB.database import get_all_tickets
+from SLACK.load_sla_yml import config_manager
 from datetime import datetime, timezone
-from slack import slack_message_sender
-from database import create_sla_breach_alert_db, update_sla_breach_alert_db
+from SLACK.slack import slack_message_sender
+from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
 
 class SLABreacher:
     def __init__(self):
