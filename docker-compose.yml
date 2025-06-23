@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3" 
 
   sla-monitor:
     build: .
@@ -32,6 +37,11 @@ services:
       retries: 3
       start_period: 40s
     command: /bin/sh -c "sleep 10 && uvicorn ROUTES.listener:app --host 0.0.0.0 --port 8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3" 
   
   scheduler:
     build: .
@@ -46,7 +56,11 @@ services:
       - sla-monitor
     restart: unless-stopped
     command: /bin/sh -c "sleep 15 && python -u ENGINE/scheduler.py"
-  
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3" 
   slack-mock:
     build: .
     ports:
@@ -54,6 +68,11 @@ services:
     volumes:
       - .:/app
     command: /bin/sh -c "sleep 15 && python -u SLACK/slack_mock.py"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3" 
 
 volumes:
   postgres_data: 
