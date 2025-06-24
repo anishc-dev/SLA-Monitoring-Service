@@ -1,3 +1,3 @@
 # SLA-Monitorer
 Design &amp; Code for SLA Monitorer
-![image](https://github.com/user-attachments/assets/ce4a831f-d23d-41c2-9ef2-b874f1dbbf88)
+![image](https://github.com/user-attachments/assets/54b85c75-cc0f-4984-92a7-faa00dfa9a3f)
