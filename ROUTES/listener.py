@@ -119,9 +119,7 @@ async def get_dashboard():
         return HTMLResponse(content=html)
     except Exception as e:
         error("Error generating dashboard HTML", error=str(e))
-        # Return a simple error page
-        error_html = "<html><head><title>Dashboard Error</title></head><body>"
-        error_html += "<h2>Dashboard Error</h2>"
-        error_html += f"<p>An error occurred while generating the dashboard: {str(e)}</p>"
-        error_html += "</body></html>"
+        error_html = f"<html><head><title>Dashboard Error</title></head><body><h2>Dashboard \
+                        Error</h2><p>An error occurred while generating the dashboard: \
+                        {str(e)}</p></body></html>"
         return HTMLResponse(content=error_html, status_code=500)
