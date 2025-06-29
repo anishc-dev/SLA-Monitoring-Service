@@ -5,22 +5,24 @@ from SLACK.load_sla_yml import config_manager
 from datetime import datetime, timezone
 from SLACK.slack import slack_message_sender
 from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
-from logger import info, error, set_operation, set_ticket_id, set_correlation_id
+from logger import info, error, set_operation, set_ticket_id, set_correlation_id, start_timer
 import uuid
 
 class SLABreacher:
     def __init__(self):
+        start_timer()
         self.open_tickets = get_all_tickets(open=True)
+        info("SLA Breacher initialized", total_tickets=len(self.open_tickets))
 
     def sla_breacher(self):
         set_operation("sla_breach_check")
         set_correlation_id(str(uuid.uuid4()))
    
         info("Checking for SLA Breach for open tickets", total_tickets=len(self.open_tickets))
-        info("SLA breach check started", separator="--------------------------------")
         sys.stdout.flush()
 
         for id, ticket in self.open_tickets.items():
+            start_timer()
             set_ticket_id(str(id))
             set_operation("sla_breach_analysis")
             priority = ticket['priority'].lower()
@@ -66,12 +68,14 @@ def main():
     sys.stdout.flush()
     while True:
         try:
+            start_timer()
             sla_breacher = SLABreacher()
             sla_breacher.sla_breacher()
             info(f"Scheduler completed check at {datetime.now()}")
             sys.stdout.flush()
             time.sleep(60)
         except Exception as e:
+            set_operation("scheduler_error_handling")
             error(f"Scheduler error: {e}")
             sys.stdout.flush()
             time.sleep(60)

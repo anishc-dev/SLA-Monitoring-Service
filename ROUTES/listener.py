@@ -5,7 +5,7 @@ from typing import Optional
 import uuid
 from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
 from fastapi.responses import HTMLResponse
-from logger import set_correlation_id, error, set_operation, set_ticket_id, info
+from logger import set_correlation_id, error, set_operation, set_ticket_id, info, start_timer
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
@@ -60,10 +60,15 @@ def log_ticket_creation(db_result, ticket_dict):
 @app.middleware("http")
 async def add_correlation_id(request: Request, call_next):
     try:
+        start_timer()
         correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
         set_correlation_id(correlation_id)
         info("Request received", correlation_id=correlation_id, path=request.url.path, method=request.method)
+        
         response = await call_next(request)
+
+        info("Request completed", correlation_id=correlation_id, path=request.url.path, method=request.method, status_code=response.status_code)
+        
     except Exception as e:
         error("Error adding correlation ID", error=str(e))
         raise
@@ -129,6 +134,7 @@ async def get_dashboard(page: int = 1, filter: str = "all"):
     Get dashboard data as HTML with pagination and filtering
     """
     try:
+        start_timer()
         set_operation("dashboard_endpoint")
         set_correlation_id(str(uuid.uuid4()))
         info("Dashboard request received", page=page, filter=filter)

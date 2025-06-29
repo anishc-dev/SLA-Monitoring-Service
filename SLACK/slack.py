@@ -1,11 +1,12 @@
 import os
 import requests
-from logger import info, error, set_operation, set_ticket_id
+from logger import info, error, set_operation, set_ticket_id, start_timer
 
 def send_slack_message(message, ticket_id):
     """
     Send a message to a Slack channel.
     """
+    start_timer()
     set_operation("slack_message_send")
     set_ticket_id(str(ticket_id))
 
@@ -35,6 +36,7 @@ def slack_message_sender(ticket, remaining_time):
     """
     Messaging for slack channel
     """
+    start_timer()
     set_operation("slack_message_preparation")
     set_ticket_id(str(ticket.get('id', '')))
     

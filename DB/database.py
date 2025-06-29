@@ -1,11 +1,12 @@
 import psycopg2
 import os
-from logger import error, info, set_correlation_id, set_operation, set_ticket_id
+from logger import error, info, set_correlation_id, set_operation, set_ticket_id, start_timer
 
 def get_db():
     return psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/sla_monitor"))
 
 def create_table_if_not_exists(table_name, columns, primary_key):
+    start_timer()
     set_operation("database_table_creation")
     conn = get_db()
     cur = conn.cursor()
@@ -16,6 +17,7 @@ def create_table_if_not_exists(table_name, columns, primary_key):
     info("Table created", table_name=table_name)
 
 def init_db():
+    start_timer()
     set_operation("database_initialization")
     create_table_if_not_exists(
         "tickets", "id INTEGER, priority VARCHAR(10), status VARCHAR(20), created_at VARCHAR(50), updated_at VARCHAR(50), \
@@ -26,6 +28,7 @@ def init_db():
     info("Database initialization completed")
 
 def create_ticket_db(ticket_data):
+    start_timer()
     set_operation("ticket_creation_db")
     set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
@@ -66,6 +69,7 @@ def create_ticket_db(ticket_data):
         conn.close()
 
 def get_all_tickets(open=None):
+    start_timer()
     set_operation("ticket_retrieval_all")
     conn = get_db()
     cur = conn.cursor()
@@ -96,6 +100,7 @@ def get_all_tickets(open=None):
     return tickets_json
 
 def get_ticket_by_id(id):
+    start_timer()
     set_operation("ticket_retrieval_by_id")
     set_ticket_id(str(id))
     conn = get_db()
@@ -113,6 +118,7 @@ def get_ticket_by_id(id):
     return ticket
 
 def get_dashboard_data():
+    start_timer()
     set_operation("dashboard_data_retrieval")
     conn = get_db()
     cur = conn.cursor()
@@ -126,6 +132,7 @@ def get_dashboard_data():
     return dashboard_data
 
 def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    start_timer()
     set_operation("sla_breach_alert_creation")
     set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
@@ -170,6 +177,7 @@ def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
         conn.close()
 
 def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    start_timer()
     set_operation("sla_breach_alert_update")
     set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
