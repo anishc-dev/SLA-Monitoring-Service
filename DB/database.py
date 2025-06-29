@@ -1,27 +1,33 @@
 import psycopg2
 import os
-from logger import error, info
+from logger import error, info, set_correlation_id, set_operation, set_ticket_id
 
 def get_db():
     return psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/sla_monitor"))
 
 def create_table_if_not_exists(table_name, columns, primary_key):
+    set_operation("database_table_creation")
     conn = get_db()
     cur = conn.cursor()
     cur.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns}, PRIMARY KEY ({primary_key}))")
     conn.commit()
     cur.close()
     conn.close()
+    info("Table created", table_name=table_name)
 
 def init_db():
+    set_operation("database_initialization")
     create_table_if_not_exists(
         "tickets", "id INTEGER, priority VARCHAR(10), status VARCHAR(20), created_at VARCHAR(50), updated_at VARCHAR(50), \
          customer_tier VARCHAR(10), escalation_level VARCHAR(10), elapsed_time_percentage INTEGER, elapsed_time_seconds INTEGER", "id")
     create_table_if_not_exists("sla_breach_alerts", "id SERIAL, ticket_id INTEGER, priority VARCHAR(10), status VARCHAR(20), \
         created_at VARCHAR(50), updated_at VARCHAR(50), customer_tier VARCHAR(10), elapsed_time_seconds INTEGER, elapsed_time_percentage INTEGER, \
         escalation_level VARCHAR(10)", "id")
+    info("Database initialization completed")
 
 def create_ticket_db(ticket_data):
+    set_operation("ticket_creation_db")
+    set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
     cur = conn.cursor()
     
@@ -39,6 +45,7 @@ def create_ticket_db(ticket_data):
                   ticket_data["created_at"], ticket_data["customer_tier"],
                   ticket_data["id"], ticket_data["updated_at"]))
             conn.commit()
+            info("Ticket updated in database", ticket_id=ticket_data["id"])
             return {"status": "UPDATED"}
 
         cur.execute("""
@@ -47,6 +54,7 @@ def create_ticket_db(ticket_data):
         """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
               ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
         conn.commit()
+        info("Ticket created in database", ticket_id=ticket_data["id"])
         return {"status": "CREATED"}
         
     except Exception as e:
@@ -58,16 +66,19 @@ def create_ticket_db(ticket_data):
         conn.close()
 
 def get_all_tickets(open=None):
+    set_operation("ticket_retrieval_all")
     conn = get_db()
     cur = conn.cursor()
     if open:
         cur.execute("""
             SELECT * FROM tickets WHERE status = 'open'
         """)
+        info("Retrieved open tickets from database")
     else:
         cur.execute("""
             SELECT * FROM tickets
         """)
+        info("Retrieved all tickets from database")
     tickets = cur.fetchall()
     cur.close()
     conn.close()
@@ -81,9 +92,12 @@ def get_all_tickets(open=None):
             "updated_at": ticket[4],
             "customer_tier": ticket[5]
         }
+    info("All tickets processed", ticket_count=len(tickets_json))
     return tickets_json
 
 def get_ticket_by_id(id):
+    set_operation("ticket_retrieval_by_id")
+    set_ticket_id(str(id))
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -92,9 +106,14 @@ def get_ticket_by_id(id):
     ticket = cur.fetchone()
     cur.close() 
     conn.close()
+    if ticket:
+        info("Ticket retrieved by ID", ticket_id=id)
+    else:
+        info("Ticket not found by ID", ticket_id=id)
     return ticket
 
 def get_dashboard_data():
+    set_operation("dashboard_data_retrieval")
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -103,9 +122,12 @@ def get_dashboard_data():
     dashboard_data = cur.fetchall()
     cur.close()
     conn.close()
+    info("Dashboard data retrieved", record_count=len(dashboard_data))
     return dashboard_data
 
 def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    set_operation("sla_breach_alert_creation")
+    set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
     cur = conn.cursor()
     
@@ -136,6 +158,7 @@ def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
         """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
         conn.commit()
 
+        info("SLA breach alert created", ticket_id=ticket_data["id"], escalation_level=escalation_level)
         return {"status": "CREATED"}
         
     except Exception as e:
@@ -147,6 +170,8 @@ def create_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
         conn.close()
 
 def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_percentage, escalation_level):
+    set_operation("sla_breach_alert_update")
+    set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
     cur = conn.cursor()
     
@@ -176,6 +201,7 @@ def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
                 WHERE id = %s
             """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
             conn.commit()
+            info("SLA breach alert updated", ticket_id=ticket_data["id"], escalation_level=escalation_level)
             return {"status": "UPDATED"}
         else:
             # Create new record if none exists
@@ -196,6 +222,7 @@ def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
                 WHERE id = %s
             """, (escalation_level, int(elapsed_time_percentage), int(elapsed_time_seconds), ticket_data["id"]))
             conn.commit()
+            info("SLA breach alert created during update", ticket_id=ticket_data["id"], escalation_level=escalation_level)
             return {"status": "CREATED"}
             
     except Exception as e:

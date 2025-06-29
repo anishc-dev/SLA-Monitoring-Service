@@ -5,19 +5,24 @@ from SLACK.load_sla_yml import config_manager
 from datetime import datetime, timezone
 from SLACK.slack import slack_message_sender
 from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
-from logger import info, error
+from logger import info, error, set_operation, set_ticket_id, set_correlation_id
+import uuid
 
 class SLABreacher:
     def __init__(self):
         self.open_tickets = get_all_tickets(open=True)
 
     def sla_breacher(self):
+        set_operation("sla_breach_check")
+        set_correlation_id(str(uuid.uuid4()))
    
         info("Checking for SLA Breach for open tickets", total_tickets=len(self.open_tickets))
         info("SLA breach check started", separator="--------------------------------")
         sys.stdout.flush()
 
         for id, ticket in self.open_tickets.items():
+            set_ticket_id(str(id))
+            set_operation("sla_breach_analysis")
             priority = ticket['priority'].lower()
             tier = ticket['customer_tier'].upper()
             sla_time = config_manager.config.get("sla_definitions", {}).get(tier, {}).get(priority)
@@ -37,22 +42,26 @@ class SLABreacher:
             elapsed_time_percentage = elapsed_time_seconds/sla_time * 100
 
             if elapsed_time_seconds/sla_time > 0.99:
+                set_operation("sla_critical_breach")
                 error(f"SLA Critical Breached for ticket: {id}")
                 db_result = update_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "BREACH")
                 if db_result.get("status") in ["CREATED", "UPDATED"]:
                     slack_message_sender(ticket, elapsed_time_seconds)
                 sys.stdout.flush()
             elif elapsed_time_percentage > 85:
+                set_operation("sla_warning_alert")
                 error(f"SLA To be Breached for ticket: {id}")
                 db_result = create_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "ALERT")
                 if db_result.get("status") == "CREATED":
                     slack_message_sender(ticket, elapsed_time_seconds)
                 sys.stdout.flush()
             else:
+                set_operation("sla_status_check")
                 info(f"SLA Not Breached for ticket: {id}, remaining time: {sla_time - elapsed_time_seconds} seconds")
                 sys.stdout.flush()
 
 def main():
+    set_operation("scheduler_main_loop")
     info("Scheduler is running")
     sys.stdout.flush()
     while True:

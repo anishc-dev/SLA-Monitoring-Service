@@ -1,14 +1,17 @@
 import os
 import requests
-from logger import info, error
+from logger import info, error, set_operation, set_ticket_id
 
 def send_slack_message(message, ticket_id):
     """
     Send a message to a Slack channel.
     """
+    set_operation("slack_message_send")
+    set_ticket_id(str(ticket_id))
 
     slack_URL = os.getenv('SLACK_URL')
     if not slack_URL:
+        error("SLACK_URL environment variable not set", ticket_id=ticket_id)
         return {"status": "error", "message": "SLACK_URL is not set"}
     slack_message = {
         "text": message
@@ -32,6 +35,9 @@ def slack_message_sender(ticket, remaining_time):
     """
     Messaging for slack channel
     """
+    set_operation("slack_message_preparation")
+    set_ticket_id(str(ticket.get('id', '')))
+    
     message = f"Ticket ID: {ticket['id']}\n"
     message += f"Ticket Priority: {ticket['priority'].upper()}\n"
     message += f"Ticket Tier: {ticket['customer_tier'].upper()}\n"
@@ -40,4 +46,5 @@ def slack_message_sender(ticket, remaining_time):
     message += f"Ticket Status: {ticket['status'].upper()}\n"
     message += f"Ticket Remaining Time: {remaining_time} seconds\n"
     
+    info("Slack message prepared", ticket_id=ticket['id'], message_length=len(message))
     return send_slack_message(message, ticket['id'])
