@@ -133,16 +133,78 @@ async def get_dashboard():
         set_correlation_id(str(uuid.uuid4()))
         info("Dashboard request received")
         dashboard_data = sorted(get_dashboard_data(), key=lambda x: x[0])
-        headers = ["ID", "Priority", "Status", "Created At", "Updated At", "Customer Tier", "Escalation Level", "Elapsed %", "Elapsed Sec"]
-        html = "<html><head><title>SLA Dashboard</title></head><body>"
-        html += "<h2>SLA Dashboard</h2>"
-        html += "<table border='1' cellpadding='5' style='border-collapse:collapse;'>"
-        html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"
+        
+        # Calculate relative times for each row
+        current_time = datetime.now(timezone.utc)
+        processed_data = []
+        
         for row in dashboard_data:
-            html += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+            try:
+                # Parse created_at and updated_at timestamps
+                created_at_str = row[3] if len(row) > 3 else ""
+                updated_at_str = row[4] if len(row) > 4 else ""
+                
+                # Calculate relative times
+                created_relative = "N/A"
+                updated_relative = "N/A"
+                
+                if created_at_str:
+                    try:
+                        created_dt = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        created_diff = current_time - created_dt
+                        created_relative = format_relative_time(created_diff)
+                    except:
+                        created_relative = "Invalid"
+                
+                if updated_at_str:
+                    try:
+                        updated_dt = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+                        updated_diff = current_time - updated_dt
+                        updated_relative = format_relative_time(updated_diff)
+                    except:
+                        updated_relative = "Invalid"
+                
+                # Create new row with relative times
+                new_row = list(row)
+                new_row.insert(4, created_relative)  # Insert after "Created At"
+                new_row.insert(6, updated_relative)  # Insert after "Updated At"
+                processed_data.append(new_row)
+                
+            except Exception as e:
+                # If there's an error processing a row, keep the original
+                error("Error processing dashboard row", error=str(e), row_data=row)
+                processed_data.append(list(row) + ["Error", "Error"])
+        
+        headers = ["ID", "Priority", "Status", "Created At", "Created", "Updated At", "Updated", "Customer Tier", "Escalation Level", "Elapsed %", "Elapsed Sec"]
+        
+        html = "<html><head><title>SLA Dashboard</title>"
+        html += "<style>"
+        html += "body { font-family: Arial, sans-serif; margin: 20px; }"
+        html += "table { border-collapse: collapse; width: 100%; margin-top: 20px; }"
+        html += "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
+        html += "th { background-color: #f2f2f2; font-weight: bold; }"
+        html += "tr:nth-child(even) { background-color: #f9f9f9; }"
+        html += "tr:hover { background-color: #f5f5f5; }"
+        html += ".relative-time { color: #666; font-size: 0.9em; }"
+        html += "</style></head><body>"
+        html += "<h2>SLA Dashboard</h2>"
+        html += "<p><em>Last updated: " + current_time.strftime("%Y-%m-%d %H:%M:%S UTC") + "</em></p>"
+        html += "<table>"
+        html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"
+        
+        for row in processed_data:
+            html += "<tr>"
+            for i, cell in enumerate(row):
+                # Apply special styling to relative time columns
+                if i in [4, 6]:  # Created Ago and Updated Ago columns
+                    html += f"<td class='relative-time'>{cell}</td>"
+                else:
+                    html += f"<td>{cell}</td>"
+            html += "</tr>"
+        
         html += "</table></body></html>"
         
-        info("Dashboard data retrieved", ticket_count=len(dashboard_data))
+        info("Dashboard data retrieved", ticket_count=len(processed_data))
         return HTMLResponse(content=html)
     except Exception as e:
         error("Error generating dashboard HTML", error=str(e))
@@ -150,3 +212,34 @@ async def get_dashboard():
                         Error</h2><p>An error occurred while generating the dashboard: \
                         {str(e)}</p></body></html>"
         return HTMLResponse(content=error_html, status_code=500)
+
+def format_relative_time(timedelta_obj):
+    """
+    Format a timedelta object into a human-readable relative time string
+    """
+    total_seconds = int(timedelta_obj.total_seconds())
+    
+    if total_seconds < 0:
+        return "Future"
+    
+    if total_seconds < 60:
+        return f"{total_seconds}s ago"
+    
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return f"{minutes}m ago"
+    
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h ago"
+    
+    days = hours // 24
+    if days < 30:
+        return f"{days}d ago"
+    
+    months = days // 30
+    if months < 12:
+        return f"{months}mo ago"
+    
+    years = months // 12
+    return f"{years}y ago"
