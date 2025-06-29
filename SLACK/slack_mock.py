@@ -4,11 +4,9 @@ import logging
 import sys
 import os
 
-# Add the app directory to the path so we can import logger
 sys.path.append('/app')
 from logger import info
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
