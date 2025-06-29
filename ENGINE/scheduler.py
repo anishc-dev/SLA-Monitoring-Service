@@ -73,12 +73,14 @@ def main():
             sla_breacher.sla_breacher()
             info(f"Scheduler completed check at {datetime.now()}")
             sys.stdout.flush()
-            time.sleep(60)
+            interval = config_manager.config.get('scheduler_interval_seconds', 60)
+            time.sleep(interval)
         except Exception as e:
             set_operation("scheduler_error_handling")
             error(f"Scheduler error: {e}")
             sys.stdout.flush()
-            time.sleep(60)
+            interval = config_manager.config.get('scheduler_interval_seconds', 60)
+            time.sleep(interval)
 
 if __name__ == "__main__":
     main()

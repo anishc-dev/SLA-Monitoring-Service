@@ -4,10 +4,11 @@ import logging
 import sys
 import os
 import requests
-from logger import info, error, set_operation, set_correlation_id, set_ticket_id, start_timer
 import uuid
 
 sys.path.append('/app')
+
+from logger import info, error, set_operation, set_correlation_id, set_ticket_id, start_timer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

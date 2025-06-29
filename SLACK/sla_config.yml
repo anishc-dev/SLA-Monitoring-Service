@@ -1,3 +1,5 @@
+scheduler_interval_seconds: 60
+
 sla_definitions:
   P0:
     high: 3600   
