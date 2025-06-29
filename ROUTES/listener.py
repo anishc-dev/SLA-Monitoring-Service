@@ -124,21 +124,34 @@ async def get_tickets_by_id(id: int):
         raise
 
 @app.get("/dashboard")
-async def get_dashboard():
+async def get_dashboard(page: int = 1, filter: str = "all"):
     """
-    Get dashboard data as HTML
+    Get dashboard data as HTML with pagination and filtering
     """
     try:
         set_operation("dashboard_endpoint")
         set_correlation_id(str(uuid.uuid4()))
-        info("Dashboard request received")
+        info("Dashboard request received", page=page, filter=filter)
         dashboard_data = sorted(get_dashboard_data(), key=lambda x: x[0])
+        
+        # Apply breach filter
+        if filter == "breach":
+            dashboard_data = [row for row in dashboard_data if len(row) > 6 and row[6] == "BREACH"]
+        elif filter == "alert":
+            dashboard_data = [row for row in dashboard_data if len(row) > 6 and row[6] == "ALERT"]
+        
+        # Pagination
+        page_size = 10
+        total_pages = (len(dashboard_data) + page_size - 1) // page_size
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_data = dashboard_data[start_idx:end_idx]
         
         # Calculate relative times for each row
         current_time = datetime.now(timezone.utc)
         processed_data = []
         
-        for row in dashboard_data:
+        for row in paginated_data:
             try:
                 # Parse created_at and updated_at timestamps
                 created_at_str = row[3] if len(row) > 3 else ""
@@ -186,9 +199,22 @@ async def get_dashboard():
         html += "tr:nth-child(even) { background-color: #f9f9f9; }"
         html += "tr:hover { background-color: #f5f5f5; }"
         html += ".relative-time { color: #666; font-size: 0.9em; }"
+        html += ".pagination { margin: 20px 0; }"
+        html += ".pagination a { padding: 8px 12px; margin: 0 4px; text-decoration: none; border: 1px solid #ddd; }"
+        html += ".pagination a:hover { background-color: #f2f2f2; }"
+        html += ".current { background-color: #007bff; color: white; }"
+        html += ".filters { margin: 20px 0; }"
         html += "</style></head><body>"
         html += "<h2>SLA Dashboard</h2>"
         html += "<p><em>Last updated: " + current_time.strftime("%Y-%m-%d %H:%M:%S UTC") + "</em></p>"
+        
+        # Filters
+        html += "<div class='filters'>"
+        html += f"<a href='/dashboard?page=1&filter=all'>All</a> "
+        html += f"<a href='/dashboard?page=1&filter=breach'>Breach Only</a> "
+        html += f"<a href='/dashboard?page=1&filter=alert'>Alert Only</a>"
+        html += "</div>"
+        
         html += "<table>"
         html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"
         
@@ -202,9 +228,21 @@ async def get_dashboard():
                     html += f"<td>{cell}</td>"
             html += "</tr>"
         
-        html += "</table></body></html>"
+        html += "</table>"
         
-        info("Dashboard data retrieved", ticket_count=len(processed_data))
+        # Pagination
+        html += "<div class='pagination'>"
+        if page > 1:
+            html += f"<a href='/dashboard?page={page-1}&filter={filter}'>Previous</a> "
+        html += f"<span class='current'>Page {page} of {total_pages}</span>"
+        if page < total_pages:
+            html += f" <a href='/dashboard?page={page+1}&filter={filter}'>Next</a>"
+        html += "</div>"
+        
+        html += f"<p>Showing {len(processed_data)} of {len(dashboard_data)} tickets</p>"
+        html += "</body></html>"
+        
+        info("Dashboard data retrieved", ticket_count=len(processed_data), total_count=len(dashboard_data), page=page, filter=filter)
         return HTMLResponse(content=html)
     except Exception as e:
         error("Error generating dashboard HTML", error=str(e))
