@@ -8,18 +8,31 @@ from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
 from logger import info, error, set_operation, set_ticket_id, set_correlation_id, start_timer
 import uuid
 import json
+import aiohttp
 
-# Import the broadcast function from listener
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ROUTES.listener import broadcast_alert
+
 
 class SLABreacher:
     def __init__(self):
         start_timer()
         self.open_tickets = get_all_tickets(open=True)
         info("SLA Breacher initialized", total_tickets=len(self.open_tickets))
+
+    async def broadcast_alert_http(self, alert_data):
+        """Send alert via HTTP to trigger WebSocket broadcast"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "http://sla-monitor:8000/broadcast-alert",
+                    json=alert_data,
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
+                    if response.status == 200:
+                        info(f"HTTP broadcast successful for ticket {alert_data.get('ticket_id')}")
+                    else:
+                        error(f"HTTP broadcast failed with status {response.status}")
+        except Exception as e:
+            error(f"HTTP broadcast error: {e}")
 
     async def sla_breacher(self):
         set_operation("sla_breach_check")
@@ -56,7 +69,6 @@ class SLABreacher:
                 db_result = update_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "BREACH")
                 if db_result.get("status") in ["CREATED", "UPDATED"]:
                     slack_message_sender(ticket, elapsed_time_seconds)
-                    # Broadcast WebSocket alert
                     try:
                         alert_data = {
                             "type": "BREACH",
@@ -67,7 +79,7 @@ class SLABreacher:
                             "elapsed_percentage": elapsed_time_percentage,
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
-                        await broadcast_alert(alert_data)
+                        await self.broadcast_alert_http(alert_data)
                         info(f"WebSocket alert broadcasted successfully for ticket {id}")
                     except Exception as e:
                         error(f"WebSocket broadcast error: {e}")
@@ -78,7 +90,7 @@ class SLABreacher:
                 db_result = create_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "ALERT")
                 if db_result.get("status") == "CREATED":
                     slack_message_sender(ticket, elapsed_time_seconds)
-                    # Broadcast WebSocket alert
+                    # Broadcast WebSocket alert via HTTP
                     try:
                         alert_data = {
                             "type": "ALERT",
@@ -90,7 +102,7 @@ class SLABreacher:
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                         info(f"Broadcasting WebSocket alert for ticket {id}")
-                        await broadcast_alert(alert_data)
+                        await self.broadcast_alert_http(alert_data)
                         info(f"WebSocket alert broadcasted successfully for ticket {id}")
                     except Exception as e:
                         error(f"WebSocket broadcast error: {e}")

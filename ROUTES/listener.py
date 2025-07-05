@@ -359,6 +359,19 @@ async def websocket_endpoint(websocket: WebSocket):
 async def broadcast_alert(alert_data):
     await manager.broadcast(json.dumps(alert_data))
 
+@app.post("/broadcast-alert")
+async def trigger_broadcast(alert_data: dict):
+    """
+    HTTP endpoint to trigger WebSocket broadcast from scheduler
+    """
+    try:
+        await manager.broadcast(json.dumps(alert_data))
+        info(f"WebSocket broadcast triggered via HTTP for ticket {alert_data.get('ticket_id')}")
+        return {"status": "success", "message": "Alert broadcasted"}
+    except Exception as e:
+        error(f"HTTP broadcast error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.delete("/clear")
 async def clear_database(ticket_id: Optional[int] = None):
     """
