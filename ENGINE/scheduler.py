@@ -1,4 +1,4 @@
-import time
+import asyncio
 import sys
 from DB.database import get_all_tickets
 from SLACK.load_sla_yml import config_manager
@@ -7,7 +7,6 @@ from SLACK.slack import slack_message_sender
 from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
 from logger import info, error, set_operation, set_ticket_id, set_correlation_id, start_timer
 import uuid
-import asyncio
 import json
 
 # Import the broadcast function from listener
@@ -22,7 +21,7 @@ class SLABreacher:
         self.open_tickets = get_all_tickets(open=True)
         info("SLA Breacher initialized", total_tickets=len(self.open_tickets))
 
-    def sla_breacher(self):
+    async def sla_breacher(self):
         set_operation("sla_breach_check")
         set_correlation_id(str(uuid.uuid4()))
    
@@ -68,7 +67,7 @@ class SLABreacher:
                             "elapsed_percentage": elapsed_time_percentage,
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
-                        asyncio.run(broadcast_alert(alert_data))
+                        await broadcast_alert(alert_data)
                         info(f"WebSocket alert broadcasted successfully for ticket {id}")
                     except Exception as e:
                         error(f"WebSocket broadcast error: {e}")
@@ -91,7 +90,7 @@ class SLABreacher:
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                         info(f"Broadcasting WebSocket alert for ticket {id}")
-                        asyncio.run(broadcast_alert(alert_data))
+                        await broadcast_alert(alert_data)
                         info(f"WebSocket alert broadcasted successfully for ticket {id}")
                     except Exception as e:
                         error(f"WebSocket broadcast error: {e}")
@@ -101,7 +100,7 @@ class SLABreacher:
                 info(f"SLA Not Breached for ticket: {id}, remaining time: {sla_time - elapsed_time_seconds} seconds")
                 sys.stdout.flush()
 
-def main():
+async def main():
     set_operation("scheduler_main_loop")
     info("Scheduler is running")
     sys.stdout.flush()
@@ -109,17 +108,17 @@ def main():
         try:
             start_timer()
             sla_breacher = SLABreacher()
-            sla_breacher.sla_breacher()
+            await sla_breacher.sla_breacher()
             info(f"Scheduler completed check at {datetime.now()}")
             sys.stdout.flush()
             interval = config_manager.config.get('scheduler_interval_seconds', 60)
-            time.sleep(interval)
+            await asyncio.sleep(interval)
         except Exception as e:
             set_operation("scheduler_error_handling")
             error(f"Scheduler error: {e}")
             sys.stdout.flush()
             interval = config_manager.config.get('scheduler_interval_seconds', 60)
-            time.sleep(interval)
+            await asyncio.sleep(interval)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

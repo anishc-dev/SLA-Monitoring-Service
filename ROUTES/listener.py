@@ -7,6 +7,11 @@ import json
 from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
 from fastapi.responses import HTMLResponse
 from logger import set_correlation_id, error, set_operation, set_ticket_id, info, start_timer
+import psycopg2
+import os
+
+def get_db():
+    return psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/sla_monitor"))
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
@@ -274,7 +279,7 @@ async def get_dashboard(page: int = 1, filter: str = "all"):
         
         # Real-time alerts section
         html += "<div id='alerts-container' style='margin-top: 20px;'>"
-        html += "<h3>Real-time Alerts</h3>"
+        html += "<p>Displaying real-time alerts</p>"
         html += "<div id='alerts'></div>"
         html += "</div>"
         
@@ -353,3 +358,45 @@ async def websocket_endpoint(websocket: WebSocket):
 
 async def broadcast_alert(alert_data):
     await manager.broadcast(json.dumps(alert_data))
+
+@app.delete("/clear")
+async def clear_database(ticket_id: Optional[int] = None):
+    """
+    Clear database: 
+    - No ticket_id: Clear all tickets and alerts
+    - With ticket_id: Clear specific ticket and its alerts
+    """
+    try:
+        set_operation("clear_database_endpoint")
+        set_correlation_id(str(uuid.uuid4()))
+        
+        conn = get_db()
+        cur = conn.cursor()
+        
+        if ticket_id:
+            cur.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
+            tickets_deleted = cur.rowcount
+            cur.execute("DELETE FROM sla_breach_alerts WHERE ticket_id = %s", (ticket_id,))
+            alerts_deleted = cur.rowcount
+            info(f"Cleared ticket {ticket_id}", tickets_deleted=tickets_deleted, alerts_deleted=alerts_deleted)
+        else:
+            cur.execute("DELETE FROM tickets")
+            tickets_deleted = cur.rowcount
+            cur.execute("DELETE FROM sla_breach_alerts")
+            alerts_deleted = cur.rowcount
+            info("Cleared all tickets and alerts", tickets_deleted=tickets_deleted, alerts_deleted=alerts_deleted)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {
+            "status": "SUCCESS",
+            "message": f"Cleared {'ticket ' + str(ticket_id) if ticket_id else 'all tickets'}",
+            "tickets_deleted": tickets_deleted,
+            "alerts_deleted": alerts_deleted
+        }
+        
+    except Exception as e:
+        error("Error clearing database", error=str(e))
+        return {"status": "ERROR", "message": str(e)}
