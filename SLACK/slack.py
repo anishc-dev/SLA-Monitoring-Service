@@ -21,7 +21,7 @@ async def send_slack_message(message, ticket_id):
     
     async with aiohttp.ClientSession() as session:
         response = await session.post(slack_URL, json=slack_message)
-    if response.status_code == 200:
+    if response.status == 200:
         info("Slack message sent successfully", ticket_id=ticket_id)
         return {"status": "success", "message": "Slack message sent successfully", "response": response.text}
     else:

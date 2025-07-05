@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SLA Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f5f5f5; }
+        .relative-time { color: #666; font-size: 0.9em; }
+        .pagination { margin: 20px 0; }
+        .pagination a { padding: 8px 12px; margin: 0 4px; text-decoration: none; border: 1px solid #ddd; }
+        .pagination a:hover { background-color: #f2f2f2; }
+        .current { background-color: #007bff; color: white; }
+        .filters { margin: 20px 0; }
+        .alert { padding: 10px; margin: 10px 0; border-radius: 5px; color: white; }
+        .alert.breach { background-color: #dc3545; }
+        .alert.warning { background-color: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+    <h2>SLA Dashboard</h2>
+    <p><em>Last updated: {{ current_time }}</em></p>
+    
+    <!-- Filters -->
+    <div class='filters'>
+        <a href='/dashboard?page=1&filter=all'>All</a> 
+        <a href='/dashboard?page=1&filter=breach'>Breach Only</a> 
+        <a href='/dashboard?page=1&filter=alert'>Alert Only</a>
+    </div>
+    
+    <!-- Data Table -->
+    <table>
+        <tr>
+            {% for header in headers %}
+            <th>{{ header }}</th>
+            {% endfor %}
+        </tr>
+        
+        {% for row in processed_data %}
+        <tr>
+            {% for cell in row %}
+                {% if loop.index0 in [4, 6] %}
+                <td class='relative-time'>{{ cell }}</td>
+                {% else %}
+                <td>{{ cell }}</td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+    
+    <!-- Pagination -->
+    <div class='pagination'>
+        {% if page > 1 %}
+        <a href='/dashboard?page={{ page-1 }}&filter={{ filter }}'>Previous</a> 
+        {% endif %}
+        <span class='current'>Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a href='/dashboard?page={{ page+1 }}&filter={{ filter }}'>Next</a>
+        {% endif %}
+    </div>
+    
+    <p>Showing {{ processed_data|length }} of {{ total_count }} tickets</p>
+    
+    <!-- Real-time alerts section -->
+    <div id='alerts-container' style='margin-top: 20px;'>
+        <h3 style='margin-bottom: 10px;'>Displaying real-time alerts</h3>
+        <div id='alerts'></div>
+    </div>
+    
+    <!-- WebSocket JavaScript -->
+    <script>
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/alerts');
+        ws.onmessage = function(event) {
+            const alert = JSON.parse(event.data);
+            const alertsDiv = document.getElementById('alerts');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert ' + alert.type.toLowerCase();
+            alertDiv.innerHTML = `
+                <strong>${alert.type}</strong> - Ticket ${alert.ticket_id} 
+                (${alert.priority} priority, ${alert.customer_tier} tier)<br>
+                Elapsed: ${alert.elapsed_percentage.toFixed(1)}% (${alert.elapsed_time.toFixed(0)}s)<br>
+                <small>${new Date(alert.timestamp).toLocaleString()}</small>
+            `;
+            alertsDiv.insertBefore(alertDiv, alertsDiv.firstChild);
+            if (alertsDiv.children.length > 5) {
+                alertsDiv.removeChild(alertsDiv.lastChild);
+            }
+        };
+        ws.onerror = function(error) { console.log('WebSocket error:', error); };
+    </script>
+</body>
+</html> 
