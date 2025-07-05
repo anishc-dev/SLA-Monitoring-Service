@@ -7,6 +7,14 @@ from SLACK.slack import slack_message_sender
 from DB.database import create_sla_breach_alert_db, update_sla_breach_alert_db
 from logger import info, error, set_operation, set_ticket_id, set_correlation_id, start_timer
 import uuid
+import asyncio
+import json
+
+# Import the broadcast function from listener
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from ROUTES.listener import broadcast_alert
 
 class SLABreacher:
     def __init__(self):
@@ -49,6 +57,21 @@ class SLABreacher:
                 db_result = update_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "BREACH")
                 if db_result.get("status") in ["CREATED", "UPDATED"]:
                     slack_message_sender(ticket, elapsed_time_seconds)
+                    # Broadcast WebSocket alert
+                    try:
+                        alert_data = {
+                            "type": "BREACH",
+                            "ticket_id": id,
+                            "priority": priority,
+                            "customer_tier": tier,
+                            "elapsed_time": elapsed_time_seconds,
+                            "elapsed_percentage": elapsed_time_percentage,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                        asyncio.run(broadcast_alert(alert_data))
+                        info(f"WebSocket alert broadcasted successfully for ticket {id}")
+                    except Exception as e:
+                        error(f"WebSocket broadcast error: {e}")
                 sys.stdout.flush()
             elif elapsed_time_percentage > 85:
                 set_operation("sla_warning_alert")
@@ -56,6 +79,22 @@ class SLABreacher:
                 db_result = create_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "ALERT")
                 if db_result.get("status") == "CREATED":
                     slack_message_sender(ticket, elapsed_time_seconds)
+                    # Broadcast WebSocket alert
+                    try:
+                        alert_data = {
+                            "type": "ALERT",
+                            "ticket_id": id,
+                            "priority": priority,
+                            "customer_tier": tier,
+                            "elapsed_time": elapsed_time_seconds,
+                            "elapsed_percentage": elapsed_time_percentage,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                        info(f"Broadcasting WebSocket alert for ticket {id}")
+                        asyncio.run(broadcast_alert(alert_data))
+                        info(f"WebSocket alert broadcasted successfully for ticket {id}")
+                    except Exception as e:
+                        error(f"WebSocket broadcast error: {e}")
                 sys.stdout.flush()
             else:
                 set_operation("sla_status_check")

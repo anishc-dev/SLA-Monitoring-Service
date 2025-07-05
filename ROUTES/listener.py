@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 import uuid
+import json
 from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
 from fastapi.responses import HTMLResponse
 from logger import set_correlation_id, error, set_operation, set_ticket_id, info, start_timer
@@ -10,6 +11,27 @@ from logger import set_correlation_id, error, set_operation, set_ticket_id, info
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
 
 init_db()
+
+# Minimal WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass
+
+manager = ConnectionManager()
 
 class TicketValidator(BaseModel):
     id: Optional[int] = Field(default=0)
@@ -210,6 +232,9 @@ async def get_dashboard(page: int = 1, filter: str = "all"):
         html += ".pagination a:hover { background-color: #f2f2f2; }"
         html += ".current { background-color: #007bff; color: white; }"
         html += ".filters { margin: 20px 0; }"
+        html += ".alert { padding: 10px; margin: 10px 0; border-radius: 5px; color: white; }"
+        html += ".alert.breach { background-color: #dc3545; }"
+        html += ".alert.warning { background-color: #ffc107; color: black; }"
         html += "</style></head><body>"
         html += "<h2>SLA Dashboard</h2>"
         html += "<p><em>Last updated: " + current_time.strftime("%Y-%m-%d %H:%M:%S UTC") + "</em></p>"
@@ -246,6 +271,35 @@ async def get_dashboard(page: int = 1, filter: str = "all"):
         html += "</div>"
         
         html += f"<p>Showing {len(processed_data)} of {len(dashboard_data)} tickets</p>"
+        
+        # Real-time alerts section
+        html += "<div id='alerts-container' style='margin-top: 20px;'>"
+        html += "<h3>Real-time Alerts</h3>"
+        html += "<div id='alerts'></div>"
+        html += "</div>"
+        
+        # WebSocket JavaScript
+        html += "<script>"
+        html += "const ws = new WebSocket('ws://' + window.location.host + '/ws/alerts');"
+        html += "ws.onmessage = function(event) {"
+        html += "  const alert = JSON.parse(event.data);"
+        html += "  const alertsDiv = document.getElementById('alerts');"
+        html += "  const alertDiv = document.createElement('div');"
+        html += "  alertDiv.className = 'alert ' + alert.type.toLowerCase();"
+        html += "  alertDiv.innerHTML = `"
+        html += "    <strong>${alert.type}</strong> - Ticket ${alert.ticket_id} "
+        html += "    (${alert.priority} priority, ${alert.customer_tier} tier)<br>"
+        html += "    Elapsed: ${alert.elapsed_percentage.toFixed(1)}% (${alert.elapsed_time.toFixed(0)}s)<br>"
+        html += "    <small>${new Date(alert.timestamp).toLocaleString()}</small>"
+        html += "  `;"
+        html += "  alertsDiv.insertBefore(alertDiv, alertsDiv.firstChild);"
+        html += "  if (alertsDiv.children.length > 5) {"
+        html += "    alertsDiv.removeChild(alertsDiv.lastChild);"
+        html += "  }"
+        html += "};"
+        html += "ws.onerror = function(error) { console.log('WebSocket error:', error); };"
+        html += "</script>"
+        
         html += "</body></html>"
         
         info("Dashboard data retrieved", ticket_count=len(processed_data), total_count=len(dashboard_data), page=page, filter=filter)
@@ -287,3 +341,15 @@ def format_relative_time(timedelta_obj):
     
     years = months // 12
     return f"{years}y ago"
+
+@app.websocket("/ws/alerts")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+async def broadcast_alert(alert_data):
+    await manager.broadcast(json.dumps(alert_data))
