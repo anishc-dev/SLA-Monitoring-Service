@@ -8,3 +8,4 @@ PyYAML
 watchdog
 websockets==12.0
 aiohttp
+Jinja2

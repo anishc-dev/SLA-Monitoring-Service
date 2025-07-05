@@ -22,27 +22,11 @@ class SLAConfigManager:
         start_timer()
         set_operation("sla_config_loading")
         set_correlation_id(str(uuid.uuid4()))
-        try:
-            with open(self.config_path, 'r') as file:
-                self.config = yaml.safe_load(file)
-            info("SLA configuration loaded successfully", config_path=self.config_path)
-        except FileNotFoundError:
-            error("SLA configuration file not found", config_path=self.config_path)
-            self.config = {}
-        except yaml.YAMLError as e:
-            error("Error parsing SLA configuration file", error=str(e))
-            self.config = {}
-        except Exception as e:
-            error("Unexpected error loading SLA configuration", error=str(e))
-            self.config = {}
-
-    def on_modified(self, event):
-        if event.src_path == self.config_path:
-            set_operation("sla_config_file_modified")
-            set_correlation_id(str(uuid.uuid4()))
-            info("Config file modified, reloading", config_path=self.config_path)
-            self.load_config()
-
+        
+        with open(self.config_path, 'r') as file:
+            self.config = yaml.safe_load(file)
+        info("SLA configuration loaded successfully", config_path=self.config_path)
+        
     def start(self):
         set_operation("sla_config_watcher_start")
         set_correlation_id(str(uuid.uuid4()))
@@ -51,11 +35,6 @@ class SLAConfigManager:
         self.observer.start()
         info("Config file watcher started", config_path=self.config_path)
 
-    def get_config(self):
-        start_timer()
-        set_operation("config_retrieval")
-        info("Configuration retrieved", config_keys=list(self.config.keys()) if self.config else [])
-        return self.config
 
 config_manager = SLAConfigManager("SLACK/sla_config.yml")
 config_manager.start()

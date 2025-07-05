@@ -1,8 +1,9 @@
 import os
 import requests
 from logger import info, error, set_operation, set_ticket_id, start_timer
+import aiohttp
 
-def send_slack_message(message, ticket_id):
+async def send_slack_message(message, ticket_id):
     """
     Send a message to a Slack channel.
     """
@@ -17,22 +18,18 @@ def send_slack_message(message, ticket_id):
     slack_message = {
         "text": message
     }
-    try:
-        response = requests.post(slack_URL, json=slack_message)
-        if response.status_code == 200:
-            info("Slack message sent successfully", ticket_id=ticket_id)
-            return {"status": "success", "message": "Slack message sent successfully", "response": response.text}
-        else:
-            error("Error sending slack message", ticket_id=ticket_id, status_code=response.status_code)
-            return {"status": "error", "message": "Error sending slack message", "response": response.text}
-    except requests.exceptions.RequestException as e:
-        error("Error sending slack message - RequestException", ticket_id=ticket_id, error=str(e))
-        return {"status": "exception", "message": "Error sending slack message", "response": str(e) }
-    except Exception as e:
-        error("Error sending slack message - Exception", ticket_id=ticket_id, error=str(e))
-        return {"status": "exception", "message": "Error sending slack message", "response": str(e) }
+    
+    async with aiohttp.ClientSession() as session:
+        response = await session.post(slack_URL, json=slack_message)
+    if response.status_code == 200:
+        info("Slack message sent successfully", ticket_id=ticket_id)
+        return {"status": "success", "message": "Slack message sent successfully", "response": response.text}
+    else:
+        error("Error sending slack message", ticket_id=ticket_id, status_code=response.status_code)
+        return {"status": "error", "message": "Error sending slack message", "response": response.text}
+   
 
-def slack_message_sender(ticket, remaining_time):
+async def slack_message_sender(ticket, remaining_time):
     """
     Messaging for slack channel
     """
@@ -49,4 +46,4 @@ def slack_message_sender(ticket, remaining_time):
     message += f"Ticket Remaining Time: {remaining_time} seconds\n"
     
     info("Slack message prepared", ticket_id=ticket['id'], message_length=len(message))
-    return send_slack_message(message, ticket['id'])
+    return await send_slack_message(message, ticket['id'])

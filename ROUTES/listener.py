@@ -9,11 +9,14 @@ from fastapi.responses import HTMLResponse
 from logger import set_correlation_id, error, set_operation, set_ticket_id, info, start_timer
 import psycopg2
 import os
+from jinja2 import Environment, FileSystemLoader
 
 def get_db():
     return psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/sla_monitor"))
 
 app = FastAPI(title="SLA Monitor API",description="API for listening to ticket creation")
+
+template_env = Environment(loader=FileSystemLoader("templates"))
 
 init_db()
 
@@ -125,6 +128,7 @@ async def create_ticket(ticket: TicketValidator):
         ticket_dict = ticket.model_dump()
         db_result = create_ticket_db(ticket_dict)
         return log_ticket_creation(db_result, ticket_dict)
+
     except Exception as e:
         error("Error creating ticket", error=str(e), ticket_id=str(ticket.id))
         raise
@@ -223,89 +227,17 @@ async def get_dashboard(page: int = 1, filter: str = "all"):
         
         headers = ["ID", "Priority", "Status", "Created At", "Created", "Updated At", "Updated", "Customer Tier", "Escalation Level", "Elapsed %", "Elapsed Sec"]
         
-        html = "<html><head><title>SLA Dashboard</title>"
-        html += "<style>"
-        html += "body { font-family: Arial, sans-serif; margin: 20px; }"
-        html += "table { border-collapse: collapse; width: 100%; margin-top: 20px; }"
-        html += "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
-        html += "th { background-color: #f2f2f2; font-weight: bold; }"
-        html += "tr:nth-child(even) { background-color: #f9f9f9; }"
-        html += "tr:hover { background-color: #f5f5f5; }"
-        html += ".relative-time { color: #666; font-size: 0.9em; }"
-        html += ".pagination { margin: 20px 0; }"
-        html += ".pagination a { padding: 8px 12px; margin: 0 4px; text-decoration: none; border: 1px solid #ddd; }"
-        html += ".pagination a:hover { background-color: #f2f2f2; }"
-        html += ".current { background-color: #007bff; color: white; }"
-        html += ".filters { margin: 20px 0; }"
-        html += ".alert { padding: 10px; margin: 10px 0; border-radius: 5px; color: white; }"
-        html += ".alert.breach { background-color: #dc3545; }"
-        html += ".alert.warning { background-color: #ffc107; color: black; }"
-        html += "</style></head><body>"
-        html += "<h2>SLA Dashboard</h2>"
-        html += "<p><em>Last updated: " + current_time.strftime("%Y-%m-%d %H:%M:%S UTC") + "</em></p>"
-        
-        # Filters
-        html += "<div class='filters'>"
-        html += f"<a href='/dashboard?page=1&filter=all'>All</a> "
-        html += f"<a href='/dashboard?page=1&filter=breach'>Breach Only</a> "
-        html += f"<a href='/dashboard?page=1&filter=alert'>Alert Only</a>"
-        html += "</div>"
-        
-        html += "<table>"
-        html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"
-        
-        for row in processed_data:
-            html += "<tr>"
-            for i, cell in enumerate(row):
-                # Apply special styling to relative time columns
-                if i in [4, 6]:  # Created Ago and Updated Ago columns
-                    html += f"<td class='relative-time'>{cell}</td>"
-                else:
-                    html += f"<td>{cell}</td>"
-            html += "</tr>"
-        
-        html += "</table>"
-        
-        # Pagination
-        html += "<div class='pagination'>"
-        if page > 1:
-            html += f"<a href='/dashboard?page={page-1}&filter={filter}'>Previous</a> "
-        html += f"<span class='current'>Page {page} of {total_pages}</span>"
-        if page < total_pages:
-            html += f" <a href='/dashboard?page={page+1}&filter={filter}'>Next</a>"
-        html += "</div>"
-        
-        html += f"<p>Showing {len(processed_data)} of {len(dashboard_data)} tickets</p>"
-        
-        # Real-time alerts section
-        html += "<div id='alerts-container' style='margin-top: 20px;'>"
-        html += "<p>Displaying real-time alerts</p>"
-        html += "<div id='alerts'></div>"
-        html += "</div>"
-        
-        # WebSocket JavaScript
-        html += "<script>"
-        html += "const ws = new WebSocket('ws://' + window.location.host + '/ws/alerts');"
-        html += "ws.onmessage = function(event) {"
-        html += "  const alert = JSON.parse(event.data);"
-        html += "  const alertsDiv = document.getElementById('alerts');"
-        html += "  const alertDiv = document.createElement('div');"
-        html += "  alertDiv.className = 'alert ' + alert.type.toLowerCase();"
-        html += "  alertDiv.innerHTML = `"
-        html += "    <strong>${alert.type}</strong> - Ticket ${alert.ticket_id} "
-        html += "    (${alert.priority} priority, ${alert.customer_tier} tier)<br>"
-        html += "    Elapsed: ${alert.elapsed_percentage.toFixed(1)}% (${alert.elapsed_time.toFixed(0)}s)<br>"
-        html += "    <small>${new Date(alert.timestamp).toLocaleString()}</small>"
-        html += "  `;"
-        html += "  alertsDiv.insertBefore(alertDiv, alertsDiv.firstChild);"
-        html += "  if (alertsDiv.children.length > 5) {"
-        html += "    alertsDiv.removeChild(alertsDiv.lastChild);"
-        html += "  }"
-        html += "};"
-        html += "ws.onerror = function(error) { console.log('WebSocket error:', error); };"
-        html += "</script>"
-        
-        html += "</body></html>"
+        # Render template with data
+        template = template_env.get_template("dashboard.html")
+        html = template.render(
+            current_time=current_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            headers=headers,
+            processed_data=processed_data,
+            page=page,
+            total_pages=total_pages,
+            filter=filter,
+            total_count=len(dashboard_data)
+        )
         
         info("Dashboard data retrieved", ticket_count=len(processed_data), total_count=len(dashboard_data), page=page, filter=filter)
         return HTMLResponse(content=html)

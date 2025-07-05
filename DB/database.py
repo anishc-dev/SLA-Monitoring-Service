@@ -19,56 +19,60 @@ def create_table_if_not_exists(table_name, columns, primary_key):
 def init_db():
     start_timer()
     set_operation("database_initialization")
+    #one table for alerts and tickets
     create_table_if_not_exists(
         "tickets", "id INTEGER, priority VARCHAR(10), status VARCHAR(20), created_at VARCHAR(50), updated_at VARCHAR(50), \
          customer_tier VARCHAR(10), escalation_level VARCHAR(10), elapsed_time_percentage INTEGER, elapsed_time_seconds INTEGER", "id")
+    #one table for alerts
     create_table_if_not_exists("sla_breach_alerts", "id SERIAL, ticket_id INTEGER, priority VARCHAR(10), status VARCHAR(20), \
         created_at VARCHAR(50), updated_at VARCHAR(50), customer_tier VARCHAR(10), elapsed_time_seconds INTEGER, elapsed_time_percentage INTEGER, \
         escalation_level VARCHAR(10)", "id")
     info("Database initialization completed")
 
 def create_ticket_db(ticket_data):
+    """
+    Database operation to create or update a ticket in the DB
+    if the ticket already exists, it will be updated
+    if the ticket does not exist, it will be created
+    """
     start_timer()
     set_operation("ticket_creation_db")
     set_ticket_id(str(ticket_data.get("id", "")))
     conn = get_db()
     cur = conn.cursor()
     
-    try:
+    cur.execute("""
+        SELECT * FROM tickets WHERE id = %s AND updated_at = %s
+    """, (ticket_data["id"], ticket_data["updated_at"]))
+    
+    if cur.fetchone(): #code to fetch tickets if exists
         cur.execute("""
-            SELECT * FROM tickets WHERE id = %s AND updated_at = %s
-        """, (ticket_data["id"], ticket_data["updated_at"]))
-        
-        if cur.fetchone():
-            cur.execute("""
-                UPDATE tickets 
-                SET priority=%s, status=%s, created_at=%s, customer_tier=%s
-                WHERE id=%s AND updated_at=%s
-            """, (ticket_data["priority"], ticket_data["status"], 
-                  ticket_data["created_at"], ticket_data["customer_tier"],
-                  ticket_data["id"], ticket_data["updated_at"]))
-            conn.commit()
-            info("Ticket updated in database", ticket_id=ticket_data["id"])
-            return {"status": "UPDATED"}
-
-        cur.execute("""
-            INSERT INTO tickets (id, priority, status, created_at, updated_at, customer_tier)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
-              ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
+            UPDATE tickets 
+            SET priority=%s, status=%s, created_at=%s, customer_tier=%s
+            WHERE id=%s AND updated_at=%s
+        """, (ticket_data["priority"], ticket_data["status"], 
+                ticket_data["created_at"], ticket_data["customer_tier"],
+                ticket_data["id"], ticket_data["updated_at"]))
         conn.commit()
-        info("Ticket created in database", ticket_id=ticket_data["id"])
-        return {"status": "CREATED"}
-        
-    except Exception as e:
-        error("Database error in create_ticket_db", error=str(e), ticket_id=ticket_data.get("id"))
-        conn.rollback()
-        return {"error": str(e)}
-    finally:
-        cur.close()
-        conn.close()
+        info("Ticket updated in database", ticket_id=ticket_data["id"])
+        return {"status": "UPDATED"}
 
+    #code to create tickets if not exists
+    cur.execute("""
+        INSERT INTO tickets (id, priority, status, created_at, updated_at, customer_tier)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
+            ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
+    conn.commit()
+    info("Ticket created in database", ticket_id=ticket_data["id"])
+    return {"status": "CREATED"}
+        
+    
 def get_all_tickets(open=None):
+    """
+    get all open tickets from the DB if open is True
+    get all tickets from the DB if open is False
+    """
     start_timer()
     set_operation("ticket_retrieval_all")
     conn = get_db()
