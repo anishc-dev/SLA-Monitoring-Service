@@ -105,6 +105,7 @@ The dashboard shows:
 - Relative time columns for created/updated timestamps
 - Pagination (10 tickets per page)
 - Filtering options (All, Breach Only, Alert Only)
+- Real-time WebSocket alerts for SLA breaches
 
 #### 2. View Alerts Only
 
@@ -161,6 +162,7 @@ scheduler_interval_seconds: 30  # Check every 30 seconds
 - `GET /tickets/{id}` - Get ticket by ID
 - `GET /dashboard` - View SLA dashboard (HTML)
 - `GET /alerts` - View SLA breach alerts (HTML)
+- `WS /ws/alerts` - WebSocket endpoint for real-time alerts
 
 ### Health Checks
 

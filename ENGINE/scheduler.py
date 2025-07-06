@@ -71,7 +71,7 @@ class SLABreacher:
                 error(f"SLA Critical Breached for ticket: {id}")
                 db_result = update_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "BREACH")
                 if db_result.get("status") in ["CREATED", "UPDATED"]:
-                    slack_message_sender(ticket, elapsed_time_seconds)
+                    await slack_message_sender(ticket, elapsed_time_seconds)
                     
                     alert_data = {
                         "type": "BREACH",
@@ -91,7 +91,7 @@ class SLABreacher:
                 error(f"SLA To be Breached for ticket: {id}")
                 db_result = create_sla_breach_alert_db(ticket, elapsed_time_seconds, elapsed_time_percentage, "ALERT")
                 if db_result.get("status") == "CREATED":
-                    slack_message_sender(ticket, elapsed_time_seconds)
+                    await slack_message_sender(ticket, elapsed_time_seconds)
                     # Broadcast WebSocket alert via HTTP
                     
                     alert_data = {
