@@ -18,27 +18,41 @@
         .alert { padding: 10px; margin: 10px 0; border-radius: 5px; color: white; }
         .alert.breach { background-color: #dc3545; }
         .alert.warning { background-color: #ffc107; color: black; }
+        /* Modal styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background: #fff; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 400px; border-radius: 8px;
+        }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .history-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .history-table th, .history-table td { border: 1px solid #ddd; padding: 6px; font-size: 13px; }
+        .history-table th { background: #f2f2f2; }
     </style>
 </head>
 <body>
     <h2>SLA Dashboard</h2>
     <p><em>Last updated: {{ current_time }}</em></p>
-    
     <!-- Filters -->
     <div class='filters'>
         <a href='/dashboard?page=1&filter=all'>All</a> 
         <a href='/dashboard?page=1&filter=breach'>Breach Only</a> 
         <a href='/dashboard?page=1&filter=alert'>Alert Only</a>
     </div>
-    
     <!-- Data Table -->
     <table>
         <tr>
             {% for header in headers %}
             <th>{{ header }}</th>
             {% endfor %}
+            <th>History</th>
         </tr>
-        
         {% for row in processed_data %}
         <tr>
             {% for cell in row %}
@@ -48,10 +62,10 @@
                 <td>{{ cell }}</td>
                 {% endif %}
             {% endfor %}
+            <td><button onclick="showHistory({{ row[0] }})">View History</button></td>
         </tr>
         {% endfor %}
     </table>
-    
     <!-- Pagination -->
     <div class='pagination'>
         {% if page > 1 %}
@@ -62,15 +76,20 @@
         <a href='/dashboard?page={{ page+1 }}&filter={{ filter }}'>Next</a>
         {% endif %}
     </div>
-    
     <p>Showing {{ processed_data|length }} of {{ total_count }} tickets</p>
-    
     <!-- Real-time alerts section -->
     <div id='alerts-container' style='margin-top: 20px;'>
         <h3 style='margin-bottom: 10px;'>Displaying real-time alerts</h3>
         <div id='alerts'></div>
     </div>
-    
+    <!-- Modal for status history -->
+    <div id="historyModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h3>Status History</h3>
+        <div id="historyContent">Loading...</div>
+      </div>
+    </div>
     <!-- WebSocket JavaScript -->
     <script>
         const ws = new WebSocket('ws://' + window.location.host + '/ws/alerts');
@@ -91,6 +110,32 @@
             }
         };
         ws.onerror = function(error) { console.log('WebSocket error:', error); };
+        // Modal logic
+        function showHistory(ticketId) {
+          const modal = document.getElementById('historyModal');
+          const content = document.getElementById('historyContent');
+          content.innerHTML = 'Loading...';
+          modal.style.display = 'block';
+          fetch(`/tickets/${ticketId}/status-history`).then(r => r.json()).then(data => {
+            if (data.status_history && data.status_history.length > 0) {
+              let html = '<table class="history-table"><tr><th>Old Status</th><th>New Status</th><th>Changed At</th></tr>';
+              data.status_history.forEach(h => {
+                html += `<tr><td>${h.old_status}</td><td>${h.new_status}</td><td>${h.changed_at}</td></tr>`;
+              });
+              html += '</table>';
+              content.innerHTML = html;
+            } else {
+              content.innerHTML = '<em>No status history found.</em>';
+            }
+          }).catch(() => { content.innerHTML = 'Error loading history.'; });
+        }
+        function closeModal() {
+          document.getElementById('historyModal').style.display = 'none';
+        }
+        window.onclick = function(event) {
+          const modal = document.getElementById('historyModal');
+          if (event.target == modal) { modal.style.display = 'none'; }
+        }
     </script>
 </body>
 </html> 
