@@ -29,6 +29,9 @@ def init_db():
         escalation_level VARCHAR(10)", "id")
     info("Database initialization completed")
 
+    create_table_if_not_exists("ticket_status_history", "id SERIAL, ticket_id INTEGER, old_status VARCHAR(20), new_status VARCHAR(20), \
+        changed_at VARCHAR(50)", "id")
+
 def create_ticket_db(ticket_data):
     """
     Database operation to create or update a ticket in the DB
@@ -41,6 +44,7 @@ def create_ticket_db(ticket_data):
     conn = get_db()
     cur = conn.cursor()
     
+    #for idempotency
     cur.execute("""
         SELECT * FROM tickets WHERE id = %s AND updated_at = %s
     """, (ticket_data["id"], ticket_data["updated_at"]))
@@ -57,16 +61,39 @@ def create_ticket_db(ticket_data):
         info("Ticket updated in database", ticket_id=ticket_data["id"])
         return {"status": "UPDATED"}
 
-    #code to create tickets if not exists
+    #for idempotency
     cur.execute("""
-        INSERT INTO tickets (id, priority, status, created_at, updated_at, customer_tier)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
-            ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
-    conn.commit()
-    info("Ticket created in database", ticket_id=ticket_data["id"])
-    return {"status": "CREATED"}
+        SELECT * from tickets WHERE id = %s
+    """, (ticket_data["id"],))
+    ticket_found = cur.fetchone()
+    if ticket_found:
+        info("Ticket found in database", ticket_id=ticket_data["id"])
+        if ticket_data["status"] != ticket_found[2]:  
+            cur.execute("""
+                INSERT INTO ticket_status_history (ticket_id, old_status, new_status, changed_at)
+                VALUES (%s, %s, %s, %s)
+            """, (ticket_data["id"], ticket_found[2], ticket_data["status"], ticket_data["updated_at"]))
+        conn.commit()
+        info("Ticket status history updated", ticket_id=ticket_data["id"])
+        return {"status": "UPDATED"}
+    else:
+        info("Ticket not found in database", ticket_id=ticket_data["id"])
+        cur.execute("""
+            INSERT INTO tickets (id, priority, status, created_at, updated_at, customer_tier)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (ticket_data["id"], ticket_data["priority"], ticket_data["status"], 
+                ticket_data["created_at"], ticket_data["updated_at"], ticket_data["customer_tier"]))
         
+        # Save initial status to history
+        cur.execute("""
+            INSERT INTO ticket_status_history (ticket_id, old_status, new_status, changed_at)
+            VALUES (%s, %s, %s, %s)
+        """, (ticket_data["id"], "new", ticket_data["status"], ticket_data["created_at"]))
+        
+        conn.commit()
+        info("Ticket created in database", ticket_id=ticket_data["id"])
+        return {"status": "CREATED"}
+    
     
 def get_all_tickets(open=None):
     """
@@ -246,4 +273,27 @@ def update_sla_breach_alert_db(ticket_data, elapsed_time_seconds, elapsed_time_p
         conn.close()
 
 
-
+def get_ticket_status_history(ticket_id):
+    start_timer()
+    set_operation("ticket_status_history_retrieval")
+    set_ticket_id(str(ticket_id))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT old_status, new_status, changed_at FROM ticket_status_history WHERE ticket_id = %s ORDER BY changed_at ASC
+    """, (ticket_id,))
+    status_history = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    # Convert to list of dictionaries for better readability
+    history_list = []
+    for record in status_history:
+        history_list.append({
+            "old_status": record[0],
+            "new_status": record[1],
+            "changed_at": record[2]
+        })
+    
+    info("Ticket status history retrieved", ticket_id=ticket_id, history_count=len(history_list))
+    return history_list

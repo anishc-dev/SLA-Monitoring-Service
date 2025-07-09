@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 import uuid
 import json
-from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data
+from DB.database import get_all_tickets, init_db, create_ticket_db, get_ticket_by_id, get_dashboard_data, get_ticket_status_history
 from fastapi.responses import HTMLResponse
 from logger import set_correlation_id, error, set_operation, set_ticket_id, info, start_timer
 import psycopg2
@@ -345,3 +345,24 @@ async def clear_database(ticket_id: Optional[int] = None):
     except Exception as e:
         error("Error clearing database", error=str(e))
         return {"status": "ERROR", "message": str(e)}
+
+
+@app.get("/tickets/{id}/status-history")
+async def get_ticket_status_history_endpoint(id: int):
+    """
+    Get status history for a ticket
+    """
+    try:
+        set_operation("status_history_endpoint")
+        set_ticket_id(str(id))
+        info("Status history request", ticket_id=id)
+        history = get_ticket_status_history(id)
+        return {
+            "ticket_id": id,
+            "status_history": history,
+            "status": "SUCCESS",
+            "message": f"Retrieved {len(history)} status changes"
+        }
+    except Exception as e:
+        error("Error retrieving status history", error=str(e), ticket_id=id)
+        raise
